@@ -1,0 +1,25 @@
+{
+  "name": "portfolio",
+  "version": "1.0.0",
+  "description": "Personal portfolio website showcasing my frontend development projects, skills, and software engineering journey. Built with HTML, CSS, JavaScript, and Tailwind CSS.",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx @tailwindcss/cli -i ./src/input.css -o ./src/output.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emmanuelalabi997-hub/Portfolio.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/emmanuelalabi997-hub/Portfolio/issues"
+  },
+  "homepage": "https://github.com/emmanuelalabi997-hub/Portfolio#readme",
+  "dependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

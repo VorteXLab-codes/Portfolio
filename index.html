@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vortex_Lab</title>
+<link rel="stylesheet" href="./src/output.css">
+<link rel="stylesheet" href="./fontawesome/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Dark page color + a soft cyan glow at the top */
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at top, rgba(12, 222, 252, 0.14), transparent 60%),
+      #141b26;
+  }
+
+  /* The canvas fills the screen and sits behind everything else */
+  #bg {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+  }
+</style>
+</head> 
+<body class="flex flex-col text-[#fbfeff] sm:flex sm:justify-center sm:items-center"> 
+<!-- backgroud noise -->
+<canvas id="bg"></canvas>
+<script>
+  const canvas = document.getElementById('bg');
+  const ctx = canvas.getContext('2d');
+
+  // ---------- SETTINGS: change these ----------
+  const SPACING     = 28;            // distance between dots (px)
+  const DOT_SIZE    = 1.2;           // dot radius (px)
+  const OPACITY     = 0.22;          // 0 to 1. Lower = more subtle
+  const COLOR       = '12, 222, 252'; // red, green, blue (your cyan)
+  const SCATTER     = 150;           // how far dots drift when "noisy" (px)
+  const WOBBLE      = 0.5;           // tiny constant movement so it never looks frozen (px)
+
+  const SETTLE_TIME = 3000;          // ms: noise -> clean grid
+  const HOLD_TIME   = 4000;          // ms: stays a clean grid
+  const NOISE_TIME  = 3000;          // ms: clean grid -> noise
+  const MAX_DELAY   = 1200;          // ms: random delay per dot so they don't all move in lockstep
+  // --------------------------------------------
+
+  // One full loop = settle + hold + noise, then it starts over forever
+  const CYCLE = SETTLE_TIME + HOLD_TIME + NOISE_TIME;
+
+  // If the visitor asked their device to reduce motion, show a still grid
+  const stillMode = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let dots = [];
+  let width = 0;
+  let height = 0;
+
+  // Step 1: create one dot for every spot on the grid
+  function createDots() {
+    const ratio = Math.min(window.devicePixelRatio || 1, 2); // sharp on retina screens
+    width = canvas.clientWidth;
+    height = canvas.clientHeight;
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    dots = [];
+    for (let y = 0; y <= height + SPACING; y += SPACING) {
+      for (let x = 0; x <= width + SPACING; x += SPACING) {
+        // Pick a random direction and distance: this is where the dot goes when it is "noisy"
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.sqrt(Math.random()) * SCATTER;
+
+        dots.push({
+          x: x,                                  // home position on the grid
+          y: y,
+          noiseX: Math.cos(angle) * distance,    // offset when fully noisy
+          noiseY: Math.sin(angle) * distance,
+          delay: Math.random() * MAX_DELAY,      // this dot's own timing offset
+          wobblePhase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+  }
+
+  // Smooth start and end instead of a harsh linear move
+  function smooth(p) {
+    return p * p * (3 - 2 * p);
+  }
+
+  // Step 2: how noisy is a dot right now? 1 = fully scattered, 0 = perfect grid
+  function noiseAmount(time) {
+    const t = ((time % CYCLE) + CYCLE) % CYCLE; // position inside the loop (always 0 to CYCLE)
+
+    if (t < SETTLE_TIME) {
+      return 1 - smooth(t / SETTLE_TIME);                          // denoising
+    }
+    if (t < SETTLE_TIME + HOLD_TIME) {
+      return 0;                                                    // clean grid
+    }
+    return smooth((t - SETTLE_TIME - HOLD_TIME) / NOISE_TIME);     // noising again
+  }
+
+  // Step 3: draw every dot at its current position
+  function draw(now) {
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = `rgba(${COLOR}, ${OPACITY})`;
+    ctx.beginPath();
+
+    for (const dot of dots) {
+      const noise = stillMode ? 0 : noiseAmount(now - dot.delay);
+      const wobble = stillMode ? 0 : WOBBLE;
+
+      const x = dot.x + dot.noiseX * noise + Math.sin(now * 0.0007 + dot.wobblePhase) * wobble;
+      const y = dot.y + dot.noiseY * noise + Math.cos(now * 0.0006 + dot.wobblePhase) * wobble;
+
+      ctx.moveTo(x + DOT_SIZE, y);
+      ctx.arc(x, y, DOT_SIZE, 0, Math.PI * 2);
+    }
+
+    ctx.fill(); // all dots are painted in one go (fast)
+  }
+
+  // Step 4: run forever
+  function animate(now) {
+    draw(now);
+    requestAnimationFrame(animate);
+  }
+
+  // Rebuild the dots if the screen size changes
+  // (phones fire "resize" when the address bar hides, so only rebuild when it really matters)
+  window.addEventListener('resize', () => {
+    if (canvas.clientWidth !== width || canvas.clientHeight > height) {
+      createDots();
+      if (stillMode) draw(0);
+    }
+  });
+
+  createDots();
+  if (stillMode) {
+    draw(0);
+  } else {
+    requestAnimationFrame(animate);
+  }
+</script>
+<div><h1 class="hidden sm:block text-red-700 font-bold text-3xl">THIS WEBSITE IS ONLY AVAILABLE FOR MOBILE PHONES FOR NOW! OTHER VERSIONS COMING SOON.</h1></div>
+<div class="flex flex-col gap-4 sm:hidden">
+<header>
+    <nav class=" flex justify-between w-full rounded-b-[5px] border border-white/15 p-5 text-[#fbfeff] bg-white/15">
+      <section class="text-2xl font-semibold ">VorteX Lab</section>
+    <section class="relative inline-block">
+      <button id="menu" class=" active:bg-transparent flex items-center gap-2 rounded-lg  px-5 py-2 text-white hover:bg-slate-700 border border-white/15 p-2 shadow-xl backdrop-blur-md">
+    <span>menu</span>
+    <span><i class="fas fa-bars text-sm"></i></span>
+      </button>
+      <section id="roll" class="fixed opacity-0 overflow-hidden transition-all duration-300  grid grid-rows-[0fr] right-0 mt-2  items-center  rounded-xl border border-slate-800 p-2 shadow-xl backdrop-blur-md z-50">
+        <div class="overflow-hidden">
+        <a href="#projects" class=" active:bg-transparent  block rounded-lg px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"> Projects</a>
+        <a href="#skills" class=" active:bg-transparent  block rounded-lg px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"> Skills</a>
+        <a href="#about" class=" active:bg-transparent  block rounded-lg px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"> About</a>
+        <a href="#contact" class=" active:bg-transparent  block rounded-lg px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"> Contact</a>
+        <a href="http://wa.me/2348082838335" ><button class=" active:scale-75 transition-all duration-200 border border-[#34d399] p-2 rounded-full flex text-[#34d399] items-center gap-[3px]">
+          <span class="  text-sm">Hire Me</span> 
+          <span class="flex items-center"><div class="w-3 h-3 bg-[#34d399] blur-[2px] rounded-full animate-pulse  border-2 border-[#5ddeae]"></div></span>
+        </button></a>
+        </div>
+      </section>
+    </section>
+</header>
+
+<main class="flex flex-col gap-4 p-2">
+  <section class="w-full px-10">
+    <div class="bg-white/15 border-white/15 p-2 rounded-full border flex text-center justify-center gap-1">
+      <span class=" flex items-center rounded-full"><div class="w-4 h-4 bg-[#34d399]  blur-[2px] rounded-full animate-pulse  border-2 border-[#5ddeae]"></div></span>
+      <h2 class=" text-center">Open to Remote Freelancing Projects</h2>
+    </div>
+  </section>
+
+  <section class="flex flex-col gap-2">
+    <h1 class="text-2xl font-semibold text-center scale-y-100">Building high-Performance web applications and responsive interfaces</h1>
+    <div class="px-10">
+    <h5 class="text-white/70 text-center">Specializing in building robust full-stack application with HTML, CSS, JS, PHP, React, C#, ASP.NET Core.</h5>
+    </div>
+
+    <aside class="flex items-center justify-center gap-2">
+      <a href="http://wa.me/2348082838335">
+        <button class=" active:text-[#2ea7d0] active:bg-[#22477a] active:scale-95 flex gap-1 justify-center items-center transition-all duration-150 rounded-lg px-2 py-3 bg-[#2ea7d0] font-semibold text-[#22477a]">
+          <i class="fa-brands fa-whatsapp text-xl"></i><span>Chat on whatsapp?</span></button></a>
+      <a href="#"><button class=" active:scale-95 transition-all duration-150 font-semibold rounded-lg  px-3 py-3 border-2 border-[#22477a] text-[#22477a] flex gap-2">
+        <span><i class=""></i></span> View works</button></a>
+    </aside>
+
+    <section>
+      <h5 class="text-sm text-center text-white/70">Fast Delivery | Pixel-Perfect UI | Clean Code Architecture</h5>
+    </section>
+  </section>
+
+  <!-- //PROJECTS -->
+  <section class="scroll-mt-2" id="projects">
+  <div class="py-4"><h1 class="text-center text-3xl font-semibold">Projects</h1></div>
+  <!-- //card1 -->
+  <article class=" py-4 px-4 flex gap-10 flex-col">
+      <section class="group
+      rounded-md border-2 transition-all duration-100 ease-in-out hover:scale-105 border-gray-700 hover:border-[#2ea7d0] px-4 py-3 flex flex-col gap-3 ">
+        <div class="border-gray-700 group-hover:border-[#2ea7d0] border-2 p-2 rounded-md ">
+          <img src="./src/img/emmybest.avif" alt="" class="rounded-md hover:scale-x-110  hover:scale-105 active:scale-x-110  active:scale-105 transition-all duration-100 ease-in-out"></div>
+        <aside class="flex flex-col gap-3">
+          <h1 class="font-semibold text-2xl">EmmyBest-Store</h1>
+          <h4 class="text-white/70">A small-scale perfume store</h4>
+          <div class="py-2.5">
+            <h2>• A fast, mobile-first e-commerce web application designed for a perfume store. Features a clean UI with shopping cart management, product catalog, and delivery flow.</h2>
+          </div>
+          <section class="flex flex-col gap-2">
+            <aside class="flex  justify-between">
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center flex items-center justify-center">HTML</div>
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center">TailwindCSS</div>
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center">CSS</div>
+            </aside>
+            <div class="bg-[#b349b3] text-white px-3 py-1 rounded-full text-center">JavaScript</div>
+          </section>
+          <div class="bg-gray-700 w-full h-[2px]  group-hover:bg-[#2ea7d0]"></div>
+          <aside class="flex justify-around">
+            <a href="https://emmybest-shop.netlify.app"><h3 class=" hover:scale-105 active:scale-95  transition-all duration-100 ease-in-out hover:text-[#2ea7d0] active:text-[#2ea7d0] text-[17px] text-gray-500">Live Demo <span class="text-center"><i class="fas fa-arrow-right   rotate-[310deg]"></i></span></h3></a>
+            <a href="https://github.com/VorteXLab-codes/Emmybest-shop"><h3 class=" hover:scale-105 active:scale-95  transition-all duration-100 ease-in-out hover:text-[#2ea7d0] active:text-[#2ea7d0] text-[17px] text-gray-500">GitHub Repo <span class="text-center"><i class="fas fa-arrow-right   rotate-[310deg]"></i></span></h3></a>
+          </aside>
+        </aside>
+      </section>
+  </article>
+  <!-- //card2 -->
+  <article class=" py-4 px-4 flex gap-10 flex-col">
+      <section class=" group rounded-md border-2 transition-all duration-100 ease-in-out hover:scale-105 border-gray-700 hover:border-[#2ea7d0] px-4 py-3 flex flex-col gap-3 ">
+        <div class="border-gray-700 group-hover:border-[#2ea7d0] border-2 p-2 rounded-md ">
+          <img src="./src/img/admissionchecker.avif" alt="" class="rounded-md hover:scale-110 hover:scale-y-[115%]"></div>
+        <aside class="flex flex-col gap-3">
+          <h1 class="font-semibold text-2xl">Admission Checker</h1>
+          <h4 class="text-white/70">An admission probability checker api</h4>
+          <div class="py-2.5">
+            <h2>• A C# RESTful API evaluating university admission chances via UTME/O'Level metrics with alternative course recommendations.</h2>
+          </div>
+          <section class="flex flex-col gap-2">
+            <aside class="flex  justify-between">
+            <!-- <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center flex items-center justify-center">React</div>
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center">TailwindCSS</div> -->
+            </aside>
+            <div class="bg-[#b349b3] text-white px-3 py-1 rounded-full text-center">ASP NET CORE</div>
+          </section>
+          <div class="bg-gray-700 w-full h-[2px] group-hover:bg-[#2ea7d0] "></div>
+          <aside class="flex justify-around">
+            <h3 class="  transition-all duration-100 ease-in-out  line-through text-[17px] text-gray-500" >Live Demo <span class="text-center"><i class="fas fa-arrow-right   rotate-[310deg]"></i></span></h3>
+            <a href="https://github.com/VorteXLab-codes/AdmissionEngine"><h3 class=" hover:scale-105 active:scale-95  transition-all duration-100 ease-in-out hover:text-[#2ea7d0] active:text-[#2ea7d0] text-[17px] text-gray-500">GitHub Repo <span class="text-center"><i class="fas fa-arrow-right   rotate-[310deg]"></i></span></h3></a>
+          </aside>
+        </aside>
+      </section>
+  </article>
+
+  <aside class="hidden" id="MoreProjects">
+   <!-- //card3 -->
+  <article class=" py-4 px-4 flex gap-10 flex-col">
+      <section class="group
+      rounded-md border-2 transition-all duration-100 ease-in-out hover:scale-105 border-gray-700 hover:border-[#2ea7d0] px-4 py-3 flex flex-col gap-3 ">
+        <div class="border-gray-700 group-hover:border-[#2ea7d0] border-2 p-2 rounded-md ">
+          <img src="./src/img/slickcutz.avif" alt="" class="rounded-md hover:scale-x-110  hover:scale-105 active:scale-x-110  active:scale-105 transition-all duration-100 ease-in-out"></div>
+        <aside class="flex flex-col gap-3">
+          <h1 class="font-semibold text-2xl">SlickCutz</h1>
+          <h4 class="text-white/70">A small-scale barber shop</h4>
+          <div class="py-2.5">
+            <h2>• A modern barber shop landing page designed to deliver a seamless user experience, including appointment scheduling inputs and service showcases.</h2>
+          </div>
+          <section class="flex flex-col gap-2">
+            <aside class="flex  justify-between">
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center flex items-center justify-center">HTML</div>
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center">TailwindCSS</div>
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center">CSS</div>
+            </aside>
+            <div class="bg-[#b349b3] text-white px-3 py-1 rounded-full text-center">JavaScript</div>
+          </section>
+          <div class="bg-gray-700 w-full h-[2px]  group-hover:bg-[#2ea7d0]"></div>
+          <aside class="flex justify-around">
+            <a href="https://vortexlab-codes.github.io/slickcutz/"><h3 class=" hover:scale-105 active:scale-95  transition-all duration-100 ease-in-out hover:text-[#2ea7d0] active:text-[#2ea7d0] text-[17px] text-gray-500">Live Demo <span class="text-center"><i class="fas fa-arrow-right   rotate-[310deg]"></i></span></h3></a>
+            <a href="https://github.com/VorteXLab-codes/slickcutz"><h3 class=" hover:scale-105 active:scale-95  transition-all duration-100 ease-in-out hover:text-[#2ea7d0] active:text-[#2ea7d0] text-[17px] text-gray-500">GitHub Repo <span class="text-center"><i class="fas fa-arrow-right   rotate-[310deg]"></i></span></h3></a>
+          </aside>
+        </aside>
+      </section>
+  </article>
+  <!-- //card4 -->
+  <article class=" py-4 px-4 flex gap-10 flex-col">
+      <section class="group
+      rounded-md border-2 transition-all duration-100 ease-in-out hover:scale-105 border-gray-700 hover:border-[#2ea7d0] px-4 py-3 flex flex-col gap-3 ">
+        <div class="border-gray-700 group-hover:border-[#2ea7d0] border-2 p-2 rounded-md ">
+          <img src="./src/img/solutech.avif" alt="" class="rounded-md hover:scale-x-110  hover:scale-105 active:scale-x-110  active:scale-105 transition-all duration-100 ease-in-out"></div>
+        <aside class="flex flex-col gap-3">
+          <h1 class="font-semibold text-2xl">SoluTech</h1>
+          <h4 class="text-white/70">A small-scale Phone Repair shop</h4>
+          <div class="py-2.5">
+            <h2>• A sleek single-page web application for gadget repair services. Features an instant cost estimation flow and interactive repair booking.</h2>
+          </div>
+          <section class="flex flex-col gap-2">
+            <aside class="flex  justify-between">
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center flex items-center justify-center">HTML</div>
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center">TailwindCSS</div>
+            <div class="bg-[#2ea7d0] text-[#22477a] px-3 py-1 rounded-full text-center">CSS</div>
+            </aside>
+            <div class="bg-[#b349b3] text-white px-3 py-1 rounded-full text-center">JavaScript</div>
+          </section>
+          <div class="bg-gray-700 w-full h-[2px]  group-hover:bg-[#2ea7d0]"></div>
+          <aside class="flex justify-around">
+            <a href="https://vortexlab-codes.github.io/SoluTech/"><h3 class=" hover:scale-105 active:scale-95  transition-all duration-100 ease-in-out hover:text-[#2ea7d0] active:text-[#2ea7d0] text-[17px] text-gray-500">Live Demo <span class="text-center"><i class="fas fa-arrow-right   rotate-[310deg]"></i></span></h3></a>
+            <a href="https://github.com/VorteXLab-codes/SoluTech"><h3 class=" hover:scale-105 active:scale-95  transition-all duration-100 ease-in-out hover:text-[#2ea7d0] active:text-[#2ea7d0] text-[17px] text-gray-500">GitHub Repo <span class="text-center"><i class="fas fa-arrow-right   rotate-[310deg]"></i></span></h3></a>
+          </aside>
+        </aside>
+      </section>
+  </article>
+  </aside>
+  </section>
+
+  <!-- //VIEW MORE PROJECTS -->
+  <section class="w-full  gap-2 flex flex-col justify-center items-center" id="whole">
+    <h1 class="text-gray-700 text-[17px]" id="detail">More projects, same standard of work</h1>
+    <button id="View" class="border-2 border-[#2ea7d0] p-4 rounded-md hover:scale-105 active:scale-95 transition-all 
+    ease-in-out flex gap-1 justify-center items-center">
+      <h2 class="text-xl text-[#2ea7d0]" id="viewtext">View more projects</h2>
+      </button>
+  </section>
+
+  <div class="bg-linear-to-r from-slate-800  via-[#2ea7d0] to-slate-800 w-full h-[2px]"></div>
+
+   <!-- //SKILLS -->
+   <section class="flex-col gap-4 flex p-4 px-12">
+    <div><h1 class="text-center text-3xl font-semibold scroll-mt-5" id="skills">Technical Skills</h1></div>
+    <article class=" items-start flex flex-col gap-2 p-2 bg-linear-to-r from-[#0000001e]  via-white/10  to-[#0000001e] border-white/20 border rounded-md active:border-[#2ea7d0] hover:scale-105 transition-all duration-75 ease-in-out">
+      <div class=" w-16 h-16 rounded-md "><img src="./src/img/frontend.avif" alt=""></div>
+   <div><h1 class="text-center text-xl font-semibold">Frontend UI</h1></div>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/html.avif" alt=""></div> <span class="font-semibold text-lg">HTML</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/css.avif" alt=""></div> <span class="font-semibold text-lg">CSS</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/js.avif" alt=""></div> <span class="font-semibold text-lg">JavaScript</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/tailwind.avif" alt=""></div> <span class="font-semibold text-lg">TailwindCSS</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/react.avif" alt=""></div> <span class="font-semibold text-lg">React</span></aside>
+    </article>
+
+    <article class=" items-start flex flex-col gap-2 p-2 bg-linear-to-r from-[#0000001e]  via-white/10  to-[#0000001e] border-white/20 border rounded-md active:border-[#2ea7d0] hover:scale-105 transition-all duration-75 ease-in-out">
+      <div class=" w-16 h-16 rounded-md "><img src="./src/img/backend.avif" alt=""></div>
+   <div><h1 class="text-center text-xl font-semibold">Backend & APIs</h1></div>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/php.avif" alt=""></div> <span class="font-semibold text-lg">PHP</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/csharp.avif" alt=""></div> <span class="font-semibold text-lg">C#</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/netcore.avif" alt=""></div> <span class="font-semibold text-lg">ASP.NET Core</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/restapi.avif" alt=""></div> <span class="font-semibold text-lg">RESTful Web APIs</span></aside>
+    </article>
+ 
+    <article class=" items-start flex flex-col gap-2 p-2 bg-linear-to-r from-[#0000001e]  via-white/10  to-[#0000001e] border-white/20 border rounded-md active:border-[#2ea7d0] hover:scale-105 transition-all duration-75 ease-in-out">
+      <div class=" w-16 h-16 rounded-md "><img src="./src/img/workflow.avif" alt=""></div>
+   <div><h1 class="text-center text-xl font-semibold">WorkFlow & Tools</h1></div>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/github.avif" alt=""></div> <span class="font-semibold text-lg">Git & GitHub</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/vscode.avif" alt=""></div> <span class="font-semibold text-lg">VS code</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/vs.avif" alt=""></div> <span class="font-semibold text-lg">Visual Studio</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/chrome.avif" alt=""></div> <span class="font-semibold text-lg">Chrome</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/github.avif" alt=""></div> <span class="font-semibold text-lg">GitHub Pages</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/netlify.avif" alt=""></div> <span class="font-semibold text-lg">Netlify</span></aside>
+   <aside class="flex flex-row gap-2 items-center"><div class=" w-12 h-12 rounded-md "><img src="./src/img/claude.avif" alt=""></div> <span class="font-semibold text-lg">claude</span></aside>
+
+    </article>
+   </section>
+
+   <!-- //ABOUT -->
+   <section class="bg-white/10 p-3">
+   <div class="p-2"><h1 class="text-center text-2xl font-semibold scroll-mt-5" id="about">Why Work With Me?</h1></div>
+   <div class="bg-linear-to-r from-[#ffffff3a]  via-transparent to-[#ffffff3a] w-full h-[1px]"></div>
+   <aside class="flex flex-col gap-2 p-2">
+    <article>
+   <div class="flex justify-start p-2"><h1 class="text-center text-xl font-semibold">Clean Code</h1></div>
+   <h3 class="text-center text-gray-400">Coding isn't just about working code, it's about code that lasts, I follow DRY, KISS, and SOLID principles, build reusable components in React & Tailwind, 
+    and structure my C# and PHP MVC projects for scalability,security, and maintainability.</h3>
+   </article>
+       <article>
+   <div class="flex justify-start p-2"><h1 class="text-center text-xl font-semibold">Performance and Design</h1></div>
+   <h3 class="text-center text-gray-400">I build fast, responsive UIs with Tailwind and React. Backed by optimized, efficent code in C# aand PHP.Clean design, fast load, smooth experience.</h3>
+   </article>
+       <article>
+   <div class="flex justify-start p-2"><h1 class="text-center text-xl font-semibold"> Clear Communication</h1></div>
+   <h3 class="text-center text-gray-400">I practice clear communication through clean, self-explanatory code and simple, well-structured documentation.</h3>
+   </article>
+   </aside>
+   </section>
+</main>
+
+<!-- //CONTACT -->
+<footer id="contact" class="flex flex-col gap-3 py-5 px-12">
+   <div class="p-2"><h1 class="text-center text-3xl font-semibold">Contact</h1></div>
+
+   <section class="flex flex-col gap-2">
+    <h1 class="text-xl">Have a project in mind? <br> Let's build something together.</h1>
+    <h2 class="text-gray-400">Motto: Speed in motion. Consistency in Execution</h2>
+   </section>
+   <div class="px-4">
+    <section class="group items-center flex flex-col gap-2 py-4 p-2 bg-linear-to-r from-[#0000001e]  via-white/10  to-[#0000001e] border-white/20 border rounded-md
+     active:border-[#2ea7d0] hover:scale-105 transition-all duration-75 ease-in-out ">
+       <button type="button" id="copyBtn" class="relative active:text-[#2ea7d0] hover:fa-envelope-open active:bg-[#22477a] active:scale-95 transition-all duration-150 rounded-lg px-6 py-3 bg-[#2ea7d0] font-semibold text-black gap-2 flex justify-center items-center">
+          <i class="fas fa-envelope group-hover:!hidden block"></i> <i class="fas fa-envelope-open !hidden group-hover:!block"></i> <span>Copy email</span></button>
+          <article class="flex flex-col gap-2">
+   <a href="https://github.com/VorteXLab-codes"><button class="flex flex-row gap-2 items-center "><div class=" w-9 h-9 rounded-md "><img src="./src/img/github.avif" alt="" class="group-hover:animate-pulse"></div> 
+    <span class="font-semibold text-lg">GitHub</span></button></a>
+   <a href=""><button class="flex flex-row gap-2 items-center"><div class=" w-9 h-9 rounded-md "><img src="./src/img/linkedin.avif" alt=""></div>
+     <span class="font-semibold text-lg line-through">LinkedIn</span></button></a>
+        </article>
+   </section>
+   </div>
+</footer>
+</div>
+
+<script src="index.js"></script>
+</body>
+</html>
